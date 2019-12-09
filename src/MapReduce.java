@@ -14,7 +14,8 @@ import org.apache.hadoop.mapreduce.Mapper;
 import org.apache.hadoop.mapreduce.Reducer;
 import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
 import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
-
+import org.apache.hadoop.mapreduce.lib.input.TextInputFormat;
+import org.apache.hadoop.mapreduce.lib.output.TextOutputFormat;
 
 public class MapReduce {
 
@@ -24,7 +25,6 @@ public class MapReduce {
         Configuration conf = new Configuration();
 
         conf.set("attributename", args[2]);
-        //conf.set("datatype",args[3]);
 
         Job job = Job.getInstance(conf, "Find Minimum and Maximum");
         job.setJarByClass(MapReduce.class);
@@ -35,8 +35,8 @@ public class MapReduce {
         job.setMapperClass(calculateMapper.class);
         job.setReducerClass(calculateReducer.class);
 
-        //job.setInputFormatClass(TextInputFormat.class);
-        //job.setOutputFormatClass(TextOutputFormat.class);
+        job.setInputFormatClass(TextInputFormat.class);
+        job.setOutputFormatClass(TextOutputFormat.class);
 
         FileInputFormat.addInputPath(job, new Path(args[0]));
         FileOutputFormat.setOutputPath(job, new Path(args[1]));
@@ -80,6 +80,7 @@ public class MapReduce {
             double sum = 0;
             double count = 0;
 
+            ArrayList<Double> percentile = new ArrayList<Double>();
             List<Double> list = new ArrayList<Double>();
             List<Double> Samples = new ArrayList<Double>();
             Iterator<DoubleWritable> iterator = values.iterator();
@@ -93,7 +94,7 @@ public class MapReduce {
                 Samples.add(value);
 
                 //Finding min valu
-                if (value < min) { e
+                if (value < min) {
                     min = value;
                 }
 
@@ -105,6 +106,10 @@ public class MapReduce {
 
             Collections.sort(list);
             Collections.reverse(Samples);
+            percentile = ((ArrayList<Double>)list);
+
+            //percentile section
+            double ninthPercentile =percentile.get((int) (percentile.size()*0.9));
 
             int length = list.size();
             double median = 0;
@@ -126,6 +131,7 @@ public class MapReduce {
             context.write(new Text("Key:" + key + "   Minimum:   "), new DoubleWritable(min));
             context.write(new Text("Key:" + key + "   Maximum:   "), new DoubleWritable(max));
             context.write(new Text("Key:" + key + "   Median:   "), new DoubleWritable(median));
+            context.write(new Text("Key:" + key + "   90th Percentile:"), new DoubleWritable(ninthPercentile));
             context.write(new Text("Key:" + key + "   Standard Deviation:   "), new DoubleWritable((double) Math.sqrt(sumOfSquares / (count - 1))));
 
             for (double doubleWritable : Samples) {
