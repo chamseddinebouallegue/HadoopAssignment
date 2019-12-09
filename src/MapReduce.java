@@ -2,14 +2,11 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
-//import java.util.StringTokenizer;
 import java.util.List;
 
 import org.apache.hadoop.conf.Configuration;
-//import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.DoubleWritable;
-//import org.apache.hadoop.io.IntWritable;
 import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.mapreduce.Job;
@@ -30,10 +27,7 @@ public class MapReduce {
         //conf.set("datatype",args[3]);
 
         Job job = Job.getInstance(conf, "Find Minimum and Maximum");
-
         job.setJarByClass(MapReduce.class);
-
-        //FileSystem fs = FileSystem.get(conf);
 
         job.setOutputKeyClass(Text.class);
         job.setOutputValueClass(DoubleWritable.class);
@@ -42,7 +36,6 @@ public class MapReduce {
         job.setReducerClass(calculateReducer.class);
 
         //job.setInputFormatClass(TextInputFormat.class);
-
         //job.setOutputFormatClass(TextOutputFormat.class);
 
         FileInputFormat.addInputPath(job, new Path(args[0]));
@@ -60,7 +53,7 @@ public class MapReduce {
             String[] colvalue = value.toString().split(",");
             Configuration config = context.getConfiguration();
             String attributename = config.get("attributename");
-			//System.out.println(attributename);
+
             if (attributename.equals("cpu")) {
                 col = 0;
             } else if (attributename.equals("networkin")) {
@@ -72,8 +65,7 @@ public class MapReduce {
             } else if (attributename.equals("target")) {
                 col = 4;
             }
-			//for (int i = 0; i < colvalue.length; i++) {
-			//System.out.println(col);
+
             t1.set(String.valueOf(col));
             context.write(t1, new DoubleWritable(Double.parseDouble(colvalue[col])));
 
@@ -85,16 +77,13 @@ public class MapReduce {
         public void reduce(Text key, Iterable<DoubleWritable> values, Context context) throws IOException, InterruptedException {
 
             double min = Integer.MAX_VALUE, max = 0;
-            List<Double> list = new ArrayList<Double>();
-            List<Double> Samples = new ArrayList<Double>();
-
-            Iterator<DoubleWritable> iterator = values.iterator(); //Iterating
             double sum = 0;
             double count = 0;
 
-			//String datatype=config.get("attributename");
-			//conf.set("attributename",args[2]);
-			//conf.set("datatype",args[3]);
+            List<Double> list = new ArrayList<Double>();
+            List<Double> Samples = new ArrayList<Double>();
+            Iterator<DoubleWritable> iterator = values.iterator();
+
             while (iterator.hasNext()) {
 
                 double value = iterator.next().get();
@@ -102,16 +91,16 @@ public class MapReduce {
                 sum = sum + value;
                 list.add(value);
                 Samples.add(value);
-				//NormalizedSamples.add(xPrime);
 
-                if (value < min) { //Finding min value
+                //Finding min valu
+                if (value < min) { e
                     min = value;
                 }
 
-                if (value > max) { //Finding max value
+                //Finding max value
+                if (value > max) {
                     max = value;
                 }
-//double xPrime=(value-min)/(max-min);
             }
 
             Collections.sort(list);
@@ -120,17 +109,12 @@ public class MapReduce {
             int length = list.size();
             double median = 0;
 
-            if (length == 2) {
-                double medianSum = list.get(0) + list.get(1);
-                median = medianSum / 2;
-
-            } else if (length % 2 == 0) {
+            if (length % 2 == 0) {
                 double medianSum = list.get((length / 2) - 1) + list.get(length / 2);
                 median = medianSum / 2;
             } else {
                 median = list.get(length / 2);
             }
-
 
             double mean = sum / count;
             double sumOfSquares = 0;
@@ -144,13 +128,7 @@ public class MapReduce {
             context.write(new Text("Key:" + key + "   Median:   "), new DoubleWritable(median));
             context.write(new Text("Key:" + key + "   Standard Deviation:   "), new DoubleWritable((double) Math.sqrt(sumOfSquares / (count - 1))));
 
-			/*for (double doubleWritable : NormalizedSamples) {
-				context.write(new Text(key), new DoubleWritable(doubleWritable));
-
-			}*/
-
             for (double doubleWritable : Samples) {
-                //sumOfSquares += (doubleWritable - mean) * (doubleWritable - mean);
                 context.write(new Text("Key:" + key + "   Normalized Sample:   "), new DoubleWritable((double) (doubleWritable - min) / (max - min)));
             }
         }
