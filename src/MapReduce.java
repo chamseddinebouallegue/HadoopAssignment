@@ -21,11 +21,11 @@ public class MapReduce {
 
     public static void main(String[] args) throws Exception {
         // TODO Auto-generated method stub
-
+        double a = gettiem()
         Configuration conf = new Configuration();
 
         conf.set("attributename", args[2]);
-
+        conf.set("startTime", a);
         Job job = Job.getInstance(conf, "Find Minimum and Maximum");
         job.setJarByClass(MapReduce.class);
 
@@ -45,7 +45,7 @@ public class MapReduce {
     }
 
     public static class calculateMapper extends Mapper<LongWritable, Text, Text, DoubleWritable> {
-
+        Text counter  = new Text();
         Text t1 = new Text();
 
         public void map(LongWritable key, Text value, Context context) throws IOException, InterruptedException {
@@ -65,14 +65,55 @@ public class MapReduce {
             } else if (attributename.equals("target")) {
                 col = 4;
             }
-
-            t1.set(String.valueOf(col));
-            context.write(t1, new DoubleWritable(Double.parseDouble(colvalue[col])));
+            String b = String.valueOf(counter);
+            int i = Integer.valueOf(b);
+            if (i%100==0){
+                i=0;
+            }else {
+                i++;
+            }
+            counter.set(String.valueOf(i));
+//            t1.set(String.valueOf(col));
+            context.write(counter, new DoubleWritable(Double.parseDouble(colvalue[col])));
 
         }
     }
+    public static class combiner extends Reducer<Text, DoubleWritable, Text, Text>
+    {
+        private IntWritable result = new IntWritable();
 
-    public static class calculateReducer extends Reducer<Text, DoubleWritable, Text, DoubleWritable> {
+        public void reduce(Text key, Iterable<DoubleWritable> values,Context context) throws IOException, InterruptedException
+        {
+            double min = Integer.MAX_VALUE, max = 0;
+            double sum = 0;
+            double count = 0;
+
+            List<Double> list = new ArrayList<Double>();
+            List<Double> Samples = new ArrayList<Double>();
+            Iterator<DoubleWritable> iterator = values.iterator();
+
+            while (iterator.hasNext()) {
+
+                double value = iterator.next().get();
+                count = count + 1;
+                sum = sum + value;
+                list.add(value);
+                Samples.add(value);
+
+                //Finding min valu
+                if (value < min) {
+                    min = value;
+                }
+
+                //Finding max value
+                if (value > max) {
+                    max = value;
+                }
+            }
+        }
+    }
+
+    public static class calculateReducer extends Reducer<Text, Text, Text, DoubleWritable> {
 
         public void reduce(Text key, Iterable<DoubleWritable> values, Context context) throws IOException, InterruptedException {
 
@@ -131,7 +172,7 @@ public class MapReduce {
             context.write(new Text("Key:" + key + "   Minimum:   "), new DoubleWritable(min));
             context.write(new Text("Key:" + key + "   Maximum:   "), new DoubleWritable(max));
             context.write(new Text("Key:" + key + "   Median:   "), new DoubleWritable(median));
-            context.write(new Text("Key:" + key + "   90th Percentile:"), new DoubleWritable(ninthPercentile));
+            context.write(new Text("Key:" + key + "   90th Percentile:  "), new DoubleWritable(ninthPercentile));
             context.write(new Text("Key:" + key + "   Standard Deviation:   "), new DoubleWritable((double) Math.sqrt(sumOfSquares / (count - 1))));
 
             for (double doubleWritable : Samples) {
