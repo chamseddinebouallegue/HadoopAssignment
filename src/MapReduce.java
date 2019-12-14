@@ -1,12 +1,10 @@
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.io.DoubleWritable;
 import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.mapreduce.Job;
@@ -21,21 +19,22 @@ public class MapReduce {
 
     public static void main(String[] args) throws Exception {
         // TODO Auto-generated method stub
-        double a = gettiem()
+
         Configuration conf = new Configuration();
 
         conf.set("attributename", args[2]);
-        conf.set("startTime", a);
+
         Job job = Job.getInstance(conf, "Find Minimum and Maximum");
         job.setJarByClass(MapReduce.class);
 
         job.setOutputKeyClass(Text.class);
-        job.setOutputValueClass(DoubleWritable.class);
+        job.setOutputValueClass(Text.class);
 
         job.setMapperClass(calculateMapper.class);
+        job.setCombinerClass(combiner.class);
         job.setReducerClass(calculateReducer.class);
 
-        job.setInputFormatClass(TextInputFormat.class);
+        job.setInputFormatClass(NewFormat.class);
         job.setOutputFormatClass(TextOutputFormat.class);
 
         FileInputFormat.addInputPath(job, new Path(args[0]));
@@ -44,16 +43,14 @@ public class MapReduce {
         System.exit(job.waitForCompletion(true) ? 0 : 1);
     }
 
-    public static class calculateMapper extends Mapper<LongWritable, Text, Text, DoubleWritable> {
-        Text counter  = new Text();
+    public static class calculateMapper extends Mapper<LongWritable, Text, Text, Text> {
+        Text counter  = new Text("0");
         Text t1 = new Text();
 
         public void map(LongWritable key, Text value, Context context) throws IOException, InterruptedException {
-            int col = 0;
-            String[] colvalue = value.toString().split(",");
+            int col = 1;
             Configuration config = context.getConfiguration();
             String attributename = config.get("attributename");
-
             if (attributename.equals("cpu")) {
                 col = 0;
             } else if (attributename.equals("networkin")) {
@@ -65,119 +62,71 @@ public class MapReduce {
             } else if (attributename.equals("target")) {
                 col = 4;
             }
+            String[] lines = value.toString().split("\n");
+            String out ="";
+            for(int j = 0; j <lines.length;j++){
+                String[] colvalue = lines[j].toString().split(",");
+                out = out.concat(colvalue[col]+",");
+            }
+
             String b = String.valueOf(counter);
             int i = Integer.valueOf(b);
-            if (i%100==0){
-                i=0;
-            }else {
-                i++;
-            }
+            i++;
+
             counter.set(String.valueOf(i));
-//            t1.set(String.valueOf(col));
-            context.write(counter, new DoubleWritable(Double.parseDouble(colvalue[col])));
-
+            context.write(counter, new Text(out));
         }
     }
-    public static class combiner extends Reducer<Text, DoubleWritable, Text, Text>
+    public static class combiner extends Reducer<Text, Text, Text, Text>
     {
-        private IntWritable result = new IntWritable();
-
-        public void reduce(Text key, Iterable<DoubleWritable> values,Context context) throws IOException, InterruptedException
+        public void reduce(Text key, Iterable<Text> values,Context context) throws IOException, InterruptedException
         {
+            Iterator<Text> iterator = values.iterator();
+            String value = (iterator.next()).toString();
+            String[] val = value.split(",");
             double min = Integer.MAX_VALUE, max = 0;
-            double sum = 0;
-            double count = 0;
 
-            List<Double> list = new ArrayList<Double>();
-            List<Double> Samples = new ArrayList<Double>();
-            Iterator<DoubleWritable> iterator = values.iterator();
-
-            while (iterator.hasNext()) {
-
-                double value = iterator.next().get();
-                count = count + 1;
-                sum = sum + value;
-                list.add(value);
-                Samples.add(value);
-
-                //Finding min valu
-                if (value < min) {
-                    min = value;
+            for (int i = 0; i<(val.length-1);i++){
+                Double doubleVal = Double.valueOf(val[i]);
+                if (doubleVal < min) {
+                    min = doubleVal;
                 }
 
                 //Finding max value
-                if (value > max) {
-                    max = value;
+                if (doubleVal > max) {
+                    max = doubleVal;
                 }
             }
+
+            List<Double> list = new ArrayList<Double>();
+            List<Double> Samples = new ArrayList<Double>();
+            context.write(new Text("1"), new Text(max+","+min));
         }
     }
 
-    public static class calculateReducer extends Reducer<Text, Text, Text, DoubleWritable> {
+    public static class calculateReducer extends Reducer<Text, Text, Text, Text> {
 
-        public void reduce(Text key, Iterable<DoubleWritable> values, Context context) throws IOException, InterruptedException {
+        public void reduce(Text key, Iterable<Text> values, Context context) throws IOException, InterruptedException {
 
             double min = Integer.MAX_VALUE, max = 0;
-            double sum = 0;
-            double count = 0;
-
-            ArrayList<Double> percentile = new ArrayList<Double>();
-            List<Double> list = new ArrayList<Double>();
-            List<Double> Samples = new ArrayList<Double>();
-            Iterator<DoubleWritable> iterator = values.iterator();
+            Iterator<Text> iterator = values.iterator();
 
             while (iterator.hasNext()) {
-
-                double value = iterator.next().get();
-                count = count + 1;
-                sum = sum + value;
-                list.add(value);
-                Samples.add(value);
-
+                String value = (iterator.next()).toString();
+                String[] val = value.split(",");
+                Double maxVal = Double.valueOf(val[0]);
+                Double minVal = Double.valueOf(val[1]);
                 //Finding min valu
-                if (value < min) {
-                    min = value;
+                if (minVal < min) {
+                    min = minVal;
                 }
 
                 //Finding max value
-                if (value > max) {
-                    max = value;
+                if (maxVal > max) {
+                    max = maxVal;
                 }
             }
-
-            Collections.sort(list);
-            Collections.reverse(Samples);
-            percentile = ((ArrayList<Double>)list);
-
-            //percentile section
-            double ninthPercentile =percentile.get((int) (percentile.size()*0.9));
-
-            int length = list.size();
-            double median = 0;
-
-            if (length % 2 == 0) {
-                double medianSum = list.get((length / 2) - 1) + list.get(length / 2);
-                median = medianSum / 2;
-            } else {
-                median = list.get(length / 2);
-            }
-
-            double mean = sum / count;
-            double sumOfSquares = 0;
-
-            for (double doubleWritable : list) {
-                sumOfSquares += (doubleWritable - mean) * (doubleWritable - mean);
-            }
-
-            context.write(new Text("Key:" + key + "   Minimum:   "), new DoubleWritable(min));
-            context.write(new Text("Key:" + key + "   Maximum:   "), new DoubleWritable(max));
-            context.write(new Text("Key:" + key + "   Median:   "), new DoubleWritable(median));
-            context.write(new Text("Key:" + key + "   90th Percentile:  "), new DoubleWritable(ninthPercentile));
-            context.write(new Text("Key:" + key + "   Standard Deviation:   "), new DoubleWritable((double) Math.sqrt(sumOfSquares / (count - 1))));
-
-            for (double doubleWritable : Samples) {
-                context.write(new Text("Key:" + key + "   Normalized Sample:   "), new DoubleWritable((double) (doubleWritable - min) / (max - min)));
-            }
+            context.write(new Text("1"), new Text("min is:" + min + "  max is:" + max));
         }
     }
 }
